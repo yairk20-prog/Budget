@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>Budget</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import{getDatabase,ref,set,onValue}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+try{
+  const app=initializeApp({apiKey:"AIzaSyBzEDjX6HdmA92krR5KR_Irj1WVXjYzkJ0",authDomain:"budget-3e0df.firebaseapp.com",databaseURL:"https://budget-3e0df-default-rtdb.europe-west1.firebasedatabase.app",projectId:"budget-3e0df",storageBucket:"budget-3e0df.firebasestorage.app",messagingSenderId:"129751933189",appId:"1:129751933189:web:fb6614052170a1ab4ed76c"});
+  const db=getDatabase(app);
+  window._fb={r:p=>ref(db,p),set,on:onValue,ok:true};
+  window.dispatchEvent(new Event("fb-ready"));
+}catch(e){console.warn(e);}
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body,#root{height:100%;overflow:hidden}
+body{font-family:"Heebo",sans-serif;overscroll-behavior:none}
+input,button,select{font-family:"Heebo",sans-serif}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(99,102,241,.3);border-radius:99px}
+.main-scroll::-webkit-scrollbar{width:5px}
+.main-scroll::-webkit-scrollbar-thumb{background:rgba(99,102,241,.4);border-radius:99px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideRight{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideLeft{from{opacity:0;transform:translateX(-32px)}to{opacity:1;transform:translateX(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.fadeUp{animation:fadeUp .28s ease forwards}
+.fadeIn{animation:fadeIn .2s ease forwards}
+.slideRight{animation:slideRight .25s ease forwards}
+.slideLeft{animation:slideLeft .25s ease forwards}
+.spin{animation:spin .8s linear infinite;display:inline-block}
+.pulse{animation:pulse 1.5s infinite}
+</style>
+</head>
+<body><div id="root"></div>
+<script type="text/babel">
+const{useState,useEffect,useCallback,useRef,useMemo}=React;
+
+/* ══════════════════════════════════════
+   CONSTANTS
+══════════════════════════════════════ */
+const DEF_USERS=[
+  {id:"u1",name:"אני",color:"#6366f1",icon:"👤"},
+  {id:"u2",name:"בת הזוג",color:"#ec4899",icon:"👤"},
+];
+const DEF_CATS=[
+  {key:"regular",      label:"צריכה שוטפת",    pct:47,color:"#6366f1"},
+  {key:"entertainment",label:"בילויים ושופינג", pct:5, color:"#ec4899"},
+  {key:"education",    label:"התפתחות",          pct:4, color:"#34d399"},
+  {key:"maaser",       label:"מעשר",             pct:10,color:"#8b5cf6"},
+  {key:"savings",      label:"חיסכון",           pct:34,color:"#0ea5e9"},
+];
+const USER_COLORS=["#6366f1","#ec4899","#34d399","#f59e0b","#8b5cf6","#0ea5e9","#ef4444","#14b8a6"];
+
+const budgetsFor=(cats,income)=>Object.fromEntries(cats.map(c=>[c.key,Math.round((income||0)*c.pct/100)]));
+const spentFor=(items,key)=>(items||[]).filter(i=>i.cat===key).reduce((a,i)=>a+(i.amount||0),0);
+const totalSpent=items=>(items||[]).reduce((a,i)=>a+(i.amount||0),0);
+
+const INIT={
+  cats:DEF_CATS,users:DEF_USERS,
+  assets:{labels:{liquid:"כסף נזיל",emergency:"כסף בחירום"},items:[
+    {key:"mom",label:"אמא",amount:130000,group:"liquid"},
+    {key:"stocks",label:"מניות",amount:90926,group:"liquid"},
+    {key:"fund",label:"קרן כספית",amount:300559,group:"liquid"},
+    {key:"trip",label:"טיול",amount:2551,group:"liquid"},
+    {key:"doron",label:"דורון K130",amount:2299,group:"liquid"},
+    {key:"emergency",label:"קרן חירום",amount:52869,group:"emergency"},
+  ]},
+  months:[
+    {id:1,name:"ינואר",incomes:{u1:11100,u2:11100},leftover:0,
+     items:[
+       {id:101,cat:"regular",desc:"שכ״ד",amount:4300,by:"u1"},
+       {id:102,cat:"regular",desc:"חשמל",amount:420,by:"u1"},
+       {id:103,cat:"entertainment",desc:"פיצה",amount:176,by:"u2"},
+       {id:104,cat:"savings",desc:"חיסכון",amount:5000,by:"u1"},
+     ]},
+    {id:2,name:"פברואר",incomes:{u1:9612,u2:9613},leftover:2227,
+     items:[
+       {id:201,cat:"regular",desc:"מגפיים",amount:200,by:"u2"},
+       {id:202,cat:"savings",desc:"חיסכון",amount:4000,by:"u1"},
+     ]},
+  ],
+};
+
+const LS="bgt10";
+const lsSave=d=>{try{localStorage.setItem(LS,JSON.stringify(d))}catch{}};
+const lsLoad=()=>{try{const s=localStorage.getItem(LS);return s?JSON.parse(s):null}catch{return null}};
+const fmt=n=>new Intl.NumberFormat("he-IL",{style:"currency",currency:"ILS",maximumFractionDigits:0}).format(n||0);
+
+/* ══════════════════════════════════════
+   THEME
+══════════════════════════════════════ */
+function useTheme(){
+  const[t,setT]=useState(()=>localStorage.getItem("th")||"dark");
+  const tog=()=>setT(p=>{const n=p==="dark"?"light":"dark";localStorage.setItem("th",n);return n;});
+  const d=t==="dark";
+  return{
+    t,tog,d,
+    bg:    d?"#0d1117":"#f2f3f5",
+    bg2:   d?"#161b22":"#ffffff",
+    bg3:   d?"#21262d":"#e9eaed",
+    bdr:   d?"rgba(65,75,90,1)":"rgba(195,200,210,1)",
+    txt:   d?"#e6edf3":"#1a1d2e",
+    txt2:  d?"#8b949e":"#6b7280",
+    acc:   "#6366f1",
+    acc2:  "#8b5cf6",
+    navBg: d?"rgba(13,17,23,.97)":"rgba(246,248,250,.97)",
+  };
+}
+
+/* ══════════════════════════════════════
+   ATOMS
+══════════════════════════════════════ */
+function ProgressBar({pct,color,h=4}){
+  return(
+    <div style={{height:h,borderRadius:99,background:"rgba(128,128,128,.15)",overflow:"hidden"}}>
+      <div style={{height:"100%",borderRadius:99,width:`${Math.min(pct||0,100)}%`,background:color,transition:"width .4s ease"}}/>
+    </div>
+  );
+}
+
+function EditInline({val,onSave,style:{},num=false,placeholder=""}){
+  const[ed,setEd]=useState(false);
+  const[v,setV]=useState(val);
+  useEffect(()=>{if(!ed)setV(val)},[val,ed]);
+  const commit=()=>{
+    const out=num?(parseFloat(v)||0):v.toString().trim();
+    if(!num&&!out){setEd(false);return;}
+    onSave(out);setEd(false);
+  };
+  if(ed)return(
+    <input autoFocus type={num?"number":"text"} value={v} placeholder={placeholder}
+      onChange={e=>setV(e.target.value)}
+      onBlur={commit} onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape")setEd(false);}}
+      style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.45)",borderRadius:6,
+        padding:"2px 8px",color:"inherit",outline:"none",fontSize:"inherit",fontWeight:"inherit",
+        fontFamily:"Heebo,sans-serif",minWidth:num?80:100,...(arguments[0].style||{})}}/>
+  );
+  return(
+    <span onClick={()=>{setV(val);setEd(true);}}
+      style={{cursor:"text",borderRadius:4,padding:"2px 4px",display:"inline-flex",alignItems:"center",gap:3,...(arguments[0].style||{})}}>
+      {num?fmt(val):val}<span style={{fontSize:10,opacity:.35,marginRight:2}}>✎</span>
+    </span>
+  );
+}
+
+/* ══════════════════════════════════════
+   MENU (3-dots)
+══════════════════════════════════════ */
+function TopMenu({th,onSettings,onUsers,onToggleTheme,cu,onLogout}){
+  const[open,setOpen]=useState(false);
+  const ref=useRef();
+  useEffect(()=>{
+    if(!open)return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
+    return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+  },[open]);
+  const item=(label,icon,action)=>(
+    <button onClick={()=>{setOpen(false);action();}}
+      style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"11px 16px",background:"none",border:"none",cursor:"pointer",color:th.txt,fontSize:14,textAlign:"right",fontFamily:"Heebo,sans-serif",borderBottom:`1px solid ${th.bdr}`}}>
+      <span style={{fontSize:16,opacity:.7}}>{icon}</span>{label}
+    </button>
+  );
+  return(
+    <div ref={ref} style={{position:"relative"}}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{width:36,height:36,borderRadius:10,border:`1px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:th.txt,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        ···
+      </button>
+      {open&&(
+        <div className="fadeIn" style={{position:"absolute",left:0,top:42,background:th.bg2,borderRadius:14,border:`1px solid ${th.bdr}`,boxShadow:"0 8px 32px rgba(0,0,0,.25)",overflow:"hidden",zIndex:500,minWidth:200}}>
+          {item("הגדרות קטגוריות","⊞",onSettings)}
+          {item("ניהול משתמשים","⊕",onUsers)}
+          {item(th.t==="dark"?"מצב יום":"מצב לילה",th.t==="dark"?"◑":"◑",onToggleTheme)}
+          <button onClick={()=>{setOpen(false);onLogout();}}
+            style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"11px 16px",background:"none",border:"none",cursor:"pointer",color:cu.color,fontSize:14,textAlign:"right",fontFamily:"Heebo,sans-serif"}}>
+            <span style={{fontSize:16}}>↩</span>יציאה ({cu.name})
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
+   LOGIN
+══════════════════════════════════════ */
+function Login({users,onLogin,th}){
+  return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:28,gap:24,background:th.bg}} className="fadeUp">
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:13,color:th.txt2,letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>Budget</div>
+        <div style={{fontSize:28,fontWeight:800,color:th.txt,letterSpacing:-.5}}>ניהול תקציב</div>
+        <div style={{fontSize:14,color:th.txt2,marginTop:6}}>בחר את המשתמש שלך</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:10,width:"100%",maxWidth:320}}>
+        {users.map(u=>(
+          <button key={u.id} onClick={()=>onLogin(u.id)}
+            style={{padding:"15px 20px",borderRadius:14,border:`1px solid ${th.bdr}`,background:th.bg2,cursor:"pointer",display:"flex",alignItems:"center",gap:14,transition:"border-color .2s"}}
+            onTouchStart={e=>{e.currentTarget.style.borderColor=u.color;e.currentTarget.style.background=th.bg3;}}
+            onTouchEnd={e=>{e.currentTarget.style.borderColor=th.bdr;e.currentTarget.style.background=th.bg2;}}>
+            <div style={{width:42,height:42,borderRadius:12,background:`${u.color}18`,border:`1px solid ${u.color}33`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke={u.color} strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              </svg>
+            </div>
+            <div style={{textAlign:"right",flex:1}}>
+              <div style={{fontSize:16,fontWeight:600,color:th.txt}}>{u.name}</div>
+            </div>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={th.txt2} strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+        ))}
+      </div>
+      <div style={{fontSize:11,color:th.txt2,textAlign:"center",letterSpacing:.3}}>הנתונים מסונכרנים בין כל המשתמשים</div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
+   USER SETTINGS
+══════════════════════════════════════ */
+function UserSettings({users,onSave,onBack,th}){
+  const[loc,setLoc]=useState(users.map(u=>({...u})));
+  const inp={background:th.bg3,border:`1px solid ${th.bdr}`,borderRadius:8,padding:"8px 12px",color:th.txt,outline:"none",fontSize:14,textAlign:"right",flex:1,fontFamily:"Heebo,sans-serif"};
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:th.bg}} className="slideRight">
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:`1px solid ${th.bdr}`,flexShrink:0}}>
+        <button onClick={onBack} style={{width:34,height:34,borderRadius:8,border:`1px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:th.txt,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <div style={{flex:1,fontSize:16,fontWeight:700,color:th.txt}}>ניהול משתמשים</div>
+        <button onClick={()=>onSave(loc)} style={{padding:"7px 16px",borderRadius:8,border:"none",cursor:"pointer",background:th.acc,color:"#fff",fontSize:13,fontWeight:600}}>שמור</button>
+      </div>
+      <div style={{overflowY:"auto",flex:1,padding:16,display:"flex",flexDirection:"column",gap:12}}>
+        {loc.map((u,i)=>(
+          <div key={u.id} style={{borderRadius:14,padding:16,background:th.bg2,border:`1px solid ${th.bdr}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <div style={{width:40,height:40,borderRadius:10,background:`${u.color}18`,border:`1px solid ${u.color}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={u.color} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              </div>
+              <input value={u.name} onChange={e=>setLoc(loc.map((x,j)=>j===i?{...x,name:e.target.value}:x))} style={inp} placeholder="שם המשתמש"/>
+              {loc.length>1&&<button onClick={()=>setLoc(loc.filter((_,j)=>j!==i))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:"#ef4444",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+            </div>
+            <div style={{fontSize:11,color:th.txt2,marginBottom:6}}>צבע</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {USER_COLORS.map(cl=>(
+                <button key={cl} onClick={()=>setLoc(loc.map((x,j)=>j===i?{...x,color:cl}:x))}
+                  style={{width:26,height:26,borderRadius:99,border:`2px solid ${u.color===cl?"#fff":"transparent"}`,background:cl,cursor:"pointer"}}/>
+              ))}
+            </div>
+          </div>
+        ))}
+        {loc.length<6&&(
+          <button onClick={()=>setLoc([...loc,{id:"u"+Date.now(),name:"משתמש חדש",color:USER_COLORS[loc.length%USER_COLORS.length]}])}
+            style={{padding:"13px 0",borderRadius:12,border:`1px dashed ${th.bdr}`,background:"transparent",color:th.txt2,fontSize:13,cursor:"pointer"}}>
+            + הוסף משתמש
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
+   CAT SETTINGS
+══════════════════════════════════════ */
+function CatSettings({cats,onSave,onBack,th}){
+  const[loc,setLoc]=useState(cats.map(c=>({...c})));
+  const tot=loc.reduce((a,c)=>a+c.pct,0);
+  const ok=tot===100;
+  const inp={background:th.bg3,border:`1px solid ${th.bdr}`,borderRadius:8,padding:"6px 10px",color:th.txt,outline:"none",fontSize:13,textAlign:"right",fontFamily:"Heebo,sans-serif"};
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:th.bg}} className="slideRight">
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:`1px solid ${th.bdr}`,flexShrink:0}}>
+        <button onClick={onBack} style={{width:34,height:34,borderRadius:8,border:`1px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:th.txt,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <div style={{flex:1,fontSize:16,fontWeight:700,color:th.txt}}>קטגוריות תקציב</div>
+        <button onClick={()=>ok&&onSave(loc)} style={{padding:"7px 16px",borderRadius:8,border:"none",cursor:ok?"pointer":"default",background:ok?th.acc:"rgba(128,128,128,.2)",color:"#fff",fontSize:13,fontWeight:600,opacity:ok?1:.5}}>שמור</button>
+      </div>
+      <div style={{borderRadius:0,padding:"10px 16px",background:ok?"rgba(16,185,129,.08)":"rgba(252,211,77,.08)",borderBottom:`1px solid ${ok?"rgba(16,185,129,.2)":"rgba(252,211,77,.2)"}`,flexShrink:0}}>
+        <span style={{fontSize:13,fontWeight:600,color:ok?"#34d399":"#fcd34d"}}>
+          {ok?"סה״כ 100% — מושלם!":tot>100?`חריג: ${tot}%`:`סה״כ ${tot}% — נותר ${100-tot}%`}
+        </span>
+      </div>
+      <div style={{overflowY:"auto",flex:1,padding:16,display:"flex",flexDirection:"column",gap:10}}>
+        {loc.map((cat,i)=>(
+          <div key={cat.key} style={{borderRadius:14,padding:14,background:th.bg2,border:`1px solid ${th.bdr}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
+                <div style={{width:10,height:10,borderRadius:99,background:cat.color,flexShrink:0}}/>
+                <input value={cat.label} onChange={e=>setLoc(loc.map((c,j)=>j===i?{...c,label:e.target.value}:c))} style={{...inp,flex:1}}/>
+              </div>
+              <span style={{fontSize:22,fontWeight:800,color:cat.color,minWidth:52,textAlign:"left",marginRight:8}}>{cat.pct}%</span>
+            </div>
+            <input type="range" min="0" max="80" value={cat.pct} style={{width:"100%",accentColor:cat.color,cursor:"pointer"}}
+              onChange={e=>setLoc(loc.map((c,j)=>j===i?{...c,pct:parseInt(e.target.value)}:c))}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
+   CAT DETAIL
+══════════════════════════════════════ */
+function CatDetail({cat,month,users,uid,onUpdate,onBack,th}){
+  const[showAdd,setShowAdd]=useState(false);
+  const[desc,setDesc]=useState("");
+  const[amt,setAmt]=useState("");
+  const items=(month.items||[]).filter(i=>i.cat===cat.key);
+  const income=Object.values(month.incomes||{}).reduce((a,b)=>a+b,0);
+  const budget=(budgetsFor(month._cats||DEF_CATS,income))[cat.key]||0;
+  const spent=items.reduce((a,i)=>a+(i.amount||0),0);
+  const isSav=cat.key==="savings";
+  const over=!isSav&&spent>budget;
+  const pct=budget>0?Math.min(spent/budget*100,100):(spent>0?100:0);
+  const barCol=over?"#ef4444":cat.color;
+  const amtCol=over?"#ef4444":"#34d399";
+
+  const addItem=()=>{
+    const a=parseFloat(amt);
+    if(!desc.trim()||!a||a<=0)return;
+    onUpdate({...month,items:[...(month.items||[]),{id:Date.now(),cat:cat.key,desc:desc.trim(),amount:a,by:uid}]});
+    setDesc("");setAmt("");setShowAdd(false);
+  };
+  const delItem=id=>onUpdate({...month,items:(month.items||[]).filter(i=>i.id!==id)});
+  const editDesc=(id,v)=>onUpdate({...month,items:(month.items||[]).map(i=>i.id===id?{...i,desc:v}:i)});
+  const editAmt=(id,v)=>onUpdate({...month,items:(month.items||[]).map(i=>i.id===id?{...i,amount:v}:i)});
+
+  const inp={background:th.bg3,border:`1px solid ${th.bdr}`,borderRadius:10,padding:"10px 14px",color:th.txt,outline:"none",fontSize:15,textAlign:"right",width:"100%"};
+  const UName=({uid:id})=>{const u=users.find(x=>x.id===id)||users[0];return<span style={{fontSize:10,padding:"1px 7px",borderRadius:99,background:`${u.color}18`,color:u.color,border:`1px solid ${u.color}2a`,whiteSpace:"nowrap"}}>{u.name}</span>;};
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%"}} className="slideRight">
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:`2px solid ${th.bdr}`,flexShrink:0,background:th.bg}}>
+        <button onClick={onBack} style={{width:34,height:34,borderRadius:8,border:`1px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:th.txt,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <div style={{flex:1}}>
+          <div style={{fontSize:16,fontWeight:700,color:th.txt}}>{cat.label}</div>
+          <div style={{fontSize:11,color:th.txt2}}>{month.name}</div>
+        </div>
+        {over&&<span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:6,background:"rgba(239,68,68,.12)",color:"#ef4444",border:"1px solid rgba(239,68,68,.2)"}}>חריגה</span>}
+      </div>
+      <div style={{padding:"14px 16px",background:th.bg2,borderBottom:`2px solid ${th.bdr}`,flexShrink:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:12,color:th.txt2}}>תקציב מוקצה</span>
+          <span style={{fontSize:12,fontWeight:600,color:cat.color}}>{fmt(budget)}</span>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:12,color:th.txt2}}>{isSav?"חסכתי":"הוצאתי"}</span>
+          <span style={{fontSize:12,fontWeight:600,color:amtCol}}>{fmt(spent)}</span>
+        </div>
+        <ProgressBar pct={pct} color={barCol} h={5}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+          <span style={{fontSize:11,color:th.txt2}}>{Math.round(pct)}%</span>
+          <span style={{fontSize:11,color:over?"#ef4444":"#34d399"}}>{over?`חריגה: ${fmt(spent-budget)}`:`נותר: ${fmt(budget-spent)}`}</span>
+        </div>
+        {isSav&&<div style={{marginTop:6,fontSize:11,color:"#f59e0b"}}>יעד חיסכון: {fmt(budget)}</div>}
+      </div>
+      <div style={{overflowY:"auto",flex:1,padding:16,display:"flex",flexDirection:"column",gap:8,background:th.bg}}>
+        {items.length===0&&!showAdd&&(
+          <div style={{textAlign:"center",padding:"48px 0",color:th.txt2}}>
+            <div style={{fontSize:32,marginBottom:8,opacity:.4}}>□</div>
+            <div style={{fontSize:14}}>אין עדיין הוצאות</div>
+          </div>
+        )}
+        {items.map(item=>(
+          <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,borderRadius:12,padding:"10px 14px",background:th.bg2,border:`1.5px solid ${th.bdr}`,boxShadow:th.d?"0 1px 4px rgba(0,0,0,.25)":"0 1px 4px rgba(0,0,0,.05)"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <EditInline val={item.desc} onSave={v=>editDesc(item.id,v)} style={{fontSize:14,color:th.txt}}/>
+                <UName uid={item.by}/>
+              </div>
+            </div>
+            <EditInline val={item.amount} num onSave={v=>editAmt(item.id,v)} style={{fontSize:14,fontWeight:600,color:cat.color,flexShrink:0}}/>
+            <button onClick={()=>delItem(item.id)} style={{width:28,height:28,borderRadius:7,border:`1px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:"#ef4444",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          </div>
+        ))}
+        {showAdd?(
+          <div style={{borderRadius:14,padding:14,background:th.bg2,border:`1px solid ${cat.color}44`,display:"flex",flexDirection:"column",gap:10}}>
+            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="תיאור" style={inp} autoFocus/>
+            <input type="number" value={amt} onChange={e=>setAmt(e.target.value)} placeholder="סכום" style={inp}
+              onKeyDown={e=>e.key==="Enter"&&addItem()}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <button onClick={addItem} style={{padding:"11px 0",borderRadius:10,border:"none",cursor:"pointer",background:th.acc,color:"#fff",fontSize:14,fontWeight:600}}>הוסף</button>
+              <button onClick={()=>{setShowAdd(false);setDesc("");setAmt("");}} style={{padding:"11px 0",borderRadius:10,border:`1px solid ${th.bdr}`,cursor:"pointer",background:"transparent",color:th.txt,fontSize:14}}>ביטול</button>
+            </div>
+          </div>
+        ):(
+          <button onClick={()=>setShowAdd(true)}
+            style={{padding:"14px 0",borderRadius:12,border:`1px dashed ${cat.color}55`,background:"transparent",color:cat.color,fontSize:13,cursor:"pointer"}}>
+            + הוסף הוצאה
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
+   MONTH DETAIL
+══════════════════════════════════════ */
+function MonthDetail({month,cats,users,uid,onUpdate,onBack,th}){
+  const[cv,setCv]=useState(null);
+  const[collapsed,setCollapsed]=useState(true); // סגור בברירת מחדל
+  const sc=cv?cats.find(c=>c.key===cv):null;
+
+  const incomes=month.incomes||{};
+  const totalIncome=Object.values(incomes).reduce((a,b)=>a+b,0);
+  const leftover=month.leftover||0;
+  const budgets=budgetsFor(cats,totalIncome);
+  const ts=totalSpent(month.items);
+  const remaining=totalIncome-ts;
+  const pctUsed=totalIncome>0?Math.min(ts/totalIncome*100,100):0;
+
+  const updIncome=(uid2,v)=>{
+    const newInc={...incomes,[uid2]:v};
+    const newTot=Object.values(newInc).reduce((a,b)=>a+b,0);
+    const sg=Math.round(newTot*((cats.find(c=>c.key==="savings")||{}).pct||0)/100);
+    onUpdate({...month,incomes:newInc,savingsGoal:sg,_cats:cats});
+  };
+  const updLeftover=v=>onUpdate({...month,leftover:v});
+
+  if(sc)return<CatDetail cat={sc} month={{...month,_cats:cats}} users={users} uid={uid} onUpdate={m=>onUpdate(m)} onBack={()=>setCv(null)} th={th}/>;
+
+  const inp={background:th.bg3,border:`2px solid ${th.bdr}`,borderRadius:10,padding:"8px 12px",color:th.txt,outline:"none",fontSize:14,textAlign:"right",width:"100%",fontFamily:"Heebo,sans-serif",transition:"border-color .2s"};
+  const accentBar = "linear-gradient(90deg,#818cf8,#a78bfa)";
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:th.bg,overflow:"hidden"}} className="slideRight">
+
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:`2px solid ${th.bdr}`,flexShrink:0,background:th.bg2}}>
+        <button onClick={onBack} style={{width:36,height:36,borderRadius:10,border:`2px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:th.txt,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <div style={{flex:1}}>
+          <EditInline val={month.name} onSave={v=>onUpdate({...month,name:v})} style={{fontSize:18,fontWeight:800,color:th.txt,letterSpacing:-.4}}/>
+        </div>
+        {/* Collapse toggle */}
+        <button onClick={()=>setCollapsed(x=>!x)}
+          style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:10,border:`2px solid ${collapsed?"#6366f1":th.bdr}`,cursor:"pointer",
+            background:collapsed?"rgba(99,102,241,.1)":"transparent",color:collapsed?"#6366f1":th.txt2,fontSize:12,fontFamily:"Heebo,sans-serif",fontWeight:600,transition:"all .2s"}}>
+          {collapsed?"פרטי חודש ▾":"סגור ▴"}
+        </button>
+      </div>
+
+      {/* Scrollable content area — summary + categories scroll together */}
+      <div style={{overflowY:"scroll",flex:1,WebkitOverflowScrolling:"touch",display:"flex",flexDirection:"column",scrollbarWidth:"thin",scrollbarColor:"rgba(99,102,241,.35) transparent"}}>
+
+      {/* Summary card — collapsible */}
+      <div style={{overflow:"hidden",transition:"max-height .3s ease",maxHeight:collapsed?"0px":"520px",flexShrink:0}}>
+        <div style={{padding:"16px",background:th.bg2,borderBottom:`2px solid ${th.bdr}`}}>
+
+          {/* Accent top line */}
+          <div style={{height:3,borderRadius:99,background:accentBar,marginBottom:16}}/>
+
+          {/* Split incomes */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            {users.map(u=>(
+              <div key={u.id} style={{borderRadius:12,padding:"10px 12px",background:th.bg3,border:`2px solid ${u.color}44`}}>
+                <div style={{fontSize:10,color:u.color,marginBottom:5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>הכנסת {u.name}</div>
+                <input type="number" value={incomes[u.id]||""} onChange={e=>updIncome(u.id,parseFloat(e.target.value)||0)}
+                  placeholder="0" style={{...inp,border:`2px solid ${u.color}44`,color:u.color,fontWeight:700,fontSize:16}}
+                  onFocus={e=>e.target.style.borderColor=u.color}
+                  onBlur={e=>e.target.style.borderColor=`${u.color}44`}/>
+              </div>
+            ))}
+          </div>
+
+          {/* Leftover */}
+          <div style={{borderRadius:12,padding:"10px 12px",background:"rgba(245,158,11,.08)",border:"2px solid rgba(245,158,11,.3)",marginBottom:12}}>
+            <div style={{fontSize:10,color:"#f59e0b",marginBottom:5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>יתרה מחודש קודם</div>
+            <input type="number" value={leftover||""} onChange={e=>updLeftover(parseFloat(e.target.value)||0)}
+              placeholder="0 — מוצג בלבד, לא משפיע על תקציב" style={{...inp,border:"2px solid rgba(245,158,11,.35)",color:"#f59e0b",fontWeight:700,fontSize:15}}/>
+          </div>
+
+          {/* Summary pills */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+            {[["תקציב",fmt(totalIncome),"#c4b5fd"],["הוצאתי",fmt(ts),remaining<0?"#fca5a5":th.txt],["נותר",fmt(remaining),remaining>=0?"#6ee7b7":"#fca5a5"]].map(([l,v,col])=>(
+              <div key={l} style={{borderRadius:10,padding:"10px 8px",textAlign:"center",background:th.bg3,border:`2px solid ${th.bdr}`}}>
+                <div style={{fontSize:9,color:th.txt2,marginBottom:3,textTransform:"uppercase",letterSpacing:.4}}>{l}</div>
+                <div style={{fontSize:14,fontWeight:800,color:col,letterSpacing:-.3}}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress */}
+          <ProgressBar pct={pctUsed} color={pctUsed>100?"#ef4444":undefined} h={6}/>
+          {pctUsed<=100&&<div style={{height:6,borderRadius:99,background:"rgba(128,128,128,.1)",marginTop:-6,overflow:"hidden",position:"relative"}}>
+            <div style={{position:"absolute",inset:0,borderRadius:99,width:`${pctUsed}%`,background:accentBar,transition:"width .4s"}}/>
+          </div>}
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:10,color:th.txt2}}>
+            <span>0%</span>
+            <span style={{color:pctUsed>100?"#fca5a5":"#6ee7b7",fontWeight:600}}>{Math.round(pctUsed)}% נוצל</span>
+            <span>100%</span>
+          </div>
+
+          {leftover>0&&(
+            <div style={{marginTop:10,padding:"7px 12px",borderRadius:8,background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.2)",display:"flex",justifyContent:"space-between"}}>
+              <span style={{fontSize:11,color:"#f59e0b"}}>יתרה מחודש קודם</span>
+              <span style={{fontSize:12,fontWeight:700,color:"#f59e0b"}}>{fmt(leftover)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mini summary bar when collapsed */}
+      {collapsed&&(
+        <div style={{padding:"10px 16px",background:th.bg2,borderBottom:`2px solid ${th.bdr}`,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",WebkitBackdropFilter:"blur(8px)"}}>
+          <div style={{display:"flex",gap:16,alignItems:"center"}}>
+            <span style={{fontSize:12,color:th.txt2}}>תקציב: <span style={{color:th.txt,fontWeight:700}}>{fmt(totalIncome)}</span></span>
+            <span style={{fontSize:12,color:th.txt2}}>הוצאתי: <span style={{color:ts>totalIncome?"#fca5a5":th.txt,fontWeight:700}}>{fmt(ts)}</span></span>
+          </div>
+          <span style={{fontSize:14,fontWeight:800,color:remaining>=0?"#6ee7b7":"#fca5a5"}}>{fmt(remaining)}</span>
+        </div>
+      )}
+
+      {/* Category cards */}
+      <div style={{overflowY:"auto",flex:1,padding:"14px 16px 24px",display:"flex",flexDirection:"column",gap:10,WebkitOverflowScrolling:"touch"}}>
+        {cats.map(cat=>{
+          const budget=budgets[cat.key]||0;
+          const sp=spentFor(month.items,cat.key);
+          const pct=budget>0?Math.min(sp/budget*100,100):(sp>0?100:0);
+          const isSav=cat.key==="savings";
+          const over=!isSav&&sp>budget;
+          const cnt=(month.items||[]).filter(i=>i.cat===cat.key).length;
+
+          // vivid colors
+          const amtCol=over?"#fca5a5":"#6ee7b7";
+          const barCol=over?"#ef4444":cat.color;
+
+          return(
+            <div key={cat.key} onClick={()=>setCv(cat.key)}
+              style={{borderRadius:14,padding:"14px 16px",cursor:"pointer",background:th.bg2,
+                border:over?"2px solid rgba(239,68,68,.5)":`2px solid ${th.bdr}`,
+                boxShadow:th.d?"0 2px 10px rgba(0,0,0,.4)":"0 2px 10px rgba(0,0,0,.07)",
+                transition:"transform .12s,box-shadow .12s"}}
+              onTouchStart={e=>{e.currentTarget._touchY=e.touches[0].clientY;e.currentTarget.style.transform="scale(.985)";}}
+              onTouchMove={e=>{if(Math.abs(e.touches[0].clientY-(e.currentTarget._touchY||0))>8){e.currentTarget._moved=true;e.currentTarget.style.transform="scale(1)";}}}
+              onTouchEnd={e=>{const moved=e.currentTarget._moved;e.currentTarget._moved=false;e.currentTarget.style.transform="scale(1)";if(!moved)setCv(cat.key);}}>
+
+              {/* Left color accent */}
+              <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:10}}>
+                <div style={{width:4,height:36,borderRadius:99,background:barCol,flexShrink:0}}/>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:15,fontWeight:700,color:th.txt,letterSpacing:-.2}}>{cat.label}</div>
+                      <div style={{fontSize:11,color:th.txt2,marginTop:1}}>{cnt} פריטים · {cat.pct}% · {fmt(budget)}</div>
+                    </div>
+                    <div style={{textAlign:"left"}}>
+                      <div style={{fontSize:16,fontWeight:800,color:amtCol,letterSpacing:-.3}}>{fmt(sp)}</div>
+                      <div style={{fontSize:10,color:over?"#fca5a5":th.txt2,textAlign:"left"}}>
+                        {isSav?(sp>=budget?"✓ יעד":`יעד: ${fmt(budget)}`):(over?`+${fmt(sp-budget)}`:`−${fmt(budget-sp)}`)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={th.txt2} strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+              </div>
+
+              <ProgressBar pct={pct} color={barCol} h={4}/>
+            </div>
+          );
+        })}
+      </div>
+      </div>{/* end scrollable wrapper */}
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════
+   MONTHS SWIPER (horizontal swipe)
+══════════════════════════════════════ */
+function MonthsSwiper({months,cats,users,uid,onUpdate,onAdd,onDelete,onInsertAfter,th}){
+  const[sel,setSel]=useState(null);
+  const[confirmDel,setConfirmDel]=useState(null);
+
+  // If a month is selected, show its detail
+  if(sel){
+    const sm=months.find(m=>m.id===sel);
+    if(sm)return<MonthDetail month={sm} cats={cats} users={users} uid={uid}
+      onUpdate={m=>{onUpdate(m);setSel(sm.id);}}
+      onBack={()=>setSel(null)} th={th}/>;
+  }
+
+  // Month list view
+  const cardBorder = th.d ? "2px solid rgba(99,102,241,.4)" : "2px solid rgba(99,102,241,.35)";
+  const cardBg = th.d ? "rgba(22,27,34,1)" : "#ffffff";
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:th.bg}}>
+      <div style={{overflowY:"auto",flex:1,padding:"16px",display:"flex",flexDirection:"column",gap:12}} className="fadeUp">
+        {months.map((month,i)=>{
+          const income=Object.values(month.incomes||{}).reduce((a,b)=>a+b,0);
+          const ts=totalSpent(month.items);
+          const rem=income-ts;
+          const pct=income>0?Math.min(ts/income*100,100):0;
+          const isOver=rem<0;
+          return(
+            <div key={month.id} onClick={e=>{if(!e.currentTarget._mv)setSel(month.id);}}
+              style={{borderRadius:16,padding:18,cursor:"pointer",background:cardBg,
+                border:isOver?"2px solid rgba(239,68,68,.55)":cardBorder,
+                boxShadow:th.d?"0 4px 16px rgba(0,0,0,.45),0 0 0 1px rgba(99,102,241,.15)":"0 4px 16px rgba(99,102,241,.1),0 0 0 1px rgba(99,102,241,.12)",
+                transition:"transform .12s,box-shadow .12s"}}
+              onTouchStart={e=>{e.currentTarget._ty=e.touches[0].clientY;e.currentTarget._mv=false;e.currentTarget.style.transform="scale(.985)";}}
+              onTouchMove={e=>{if(Math.abs(e.touches[0].clientY-(e.currentTarget._ty||0))>8){e.currentTarget._mv=true;e.currentTarget.style.transform="scale(1)";}}}
+              onTouchEnd={e=>{e.currentTarget.style.transform="scale(1)";if(e.currentTarget._mv){e.currentTarget._mv=false;}}}>
+
+              {/* Top row */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                <div>
+                  <div style={{fontSize:19,fontWeight:800,color:th.txt,letterSpacing:-.4}}>{month.name}</div>
+                  <div style={{fontSize:12,color:th.txt2,marginTop:3}}>
+                    הכנסה: <span style={{fontWeight:600,color:th.txt}}>{fmt(income)}</span>
+                    {(month.leftover||0)>0&&<span style={{color:"#f59e0b",marginRight:8}}> · יתרה: {fmt(month.leftover)}</span>}
+                  </div>
+                </div>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontSize:22,fontWeight:800,letterSpacing:-.5,color:rem>=0?"#34d399":"#ef4444"}}>{fmt(rem)}</div>
+                  <div style={{fontSize:10,color:th.txt2,marginTop:1}}>נותר</div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <ProgressBar pct={pct} color={pct>100?"#ef4444":"#6366f1"} h={6}/>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:5,fontSize:11,color:th.txt2}}>
+                <span>הוצאתי {fmt(ts)}</span>
+                <span style={{color:pct>100?"#ef4444":"#34d399",fontWeight:600}}>{Math.round(pct)}%</span>
+              </div>
+
+              {/* Category mini-bars */}
+              <div style={{display:"flex",gap:3,marginTop:10}}>
+                {cats.map(cat=>{
+                  const b=(budgetsFor(cats,income))[cat.key]||0;
+                  const s=spentFor(month.items,cat.key);
+                  const p=b>0?Math.min(s/b*100,100):0;
+                  const ov=cat.key!=="savings"&&s>b;
+                  return<div key={cat.key} title={cat.label} style={{flex:cat.pct,display:"flex",flexDirection:"column",gap:2}}>
+                    <div style={{height:3,borderRadius:99,background:"rgba(128,128,128,.15)",overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${p}%`,background:ov?"#ef4444":cat.color,borderRadius:99,transition:"width .4s"}}/>
+                    </div>
+                  </div>;
+                })}
+              </div>
+
+              {/* Footer */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,paddingTop:10,borderTop:`1px solid ${th.bdr}`}}>
+                <span style={{fontSize:11,color:th.txt2}}>{(month.items||[]).length} הוצאות</span>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <button onClick={e=>{e.stopPropagation();onInsertAfter(month.id);}}
+                    style={{fontSize:11,color:th.txt2,background:"none",border:`1px solid ${th.bdr}`,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontFamily:"Heebo,sans-serif"}}>
+                    + אחריו
+                  </button>
+                  <button onClick={e=>{e.stopPropagation();setConfirmDel({id:month.id,name:month.name});}}
+                    style={{fontSize:11,color:"#ef4444",background:"none",border:"1px solid rgba(239,68,68,.25)",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontFamily:"Heebo,sans-serif"}}>
+                    מחק
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <button onClick={onAdd}
+          style={{padding:"15px 0",borderRadius:14,border:`1.5px dashed ${th.bdr}`,background:"transparent",color:th.txt2,fontSize:13,cursor:"pointer",fontFamily:"Heebo,sans-serif",marginBottom:4}}>
+          + הוסף חודש חדש
+        </button>
+      </div>
+
+      {/* Confirm delete */}
+      {confirmDel&&(
+        <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setConfirmDel(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:th.bg2,borderRadius:20,padding:24,width:"100%",maxWidth:320,border:`1px solid ${th.bdr}`}}>
+            <div style={{fontSize:16,fontWeight:700,color:th.txt,marginBottom:6}}>מחק את {confirmDel.name}?</div>
+            <div style={{fontSize:13,color:th.txt2,marginBottom:20}}>כל הנתונים של החודש יימחקו לצמיתות.</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <button onClick={()=>setConfirmDel(null)} style={{padding:"11px 0",borderRadius:10,border:`1px solid ${th.bdr}`,cursor:"pointer",background:"transparent",color:th.txt,fontSize:14,fontFamily:"Heebo,sans-serif"}}>ביטול</button>
+              <button onClick={()=>{onDelete(confirmDel.id);setConfirmDel(null);}} style={{padding:"11px 0",borderRadius:10,border:"none",cursor:"pointer",background:"#ef4444",color:"#fff",fontSize:14,fontWeight:600,fontFamily:"Heebo,sans-serif"}}>מחק</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════
+   ASSETS
+══════════════════════════════════════ */
+function AssetRow({it,color,onSaveAmt,onSaveLbl,onDel,th}){
+  const[val,setVal]=useState(it.amount===0?"":String(it.amount));
+  const typing=useRef(false);
+  useEffect(()=>{if(!typing.current)setVal(it.amount===0?"":String(it.amount));},[it.amount]);
+  const inp={background:th.bg3,border:`2px solid ${th.bdr}`,borderRadius:8,padding:"6px 10px",color,outline:"none",fontSize:14,textAlign:"right",fontFamily:"Heebo,sans-serif",fontWeight:700,width:110,transition:"border-color .2s"};
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:10,borderRadius:12,padding:"11px 14px",background:th.bg2,border:`2px solid ${th.bdr}`,boxShadow:th.d?"0 1px 6px rgba(0,0,0,.3)":"0 1px 6px rgba(0,0,0,.05)"}}>
+      <div style={{width:4,height:28,borderRadius:99,background:color,flexShrink:0}}/>
+      <div style={{flex:1,minWidth:0}}>
+        <EditInline val={it.label} onSave={onSaveLbl} style={{fontSize:14,fontWeight:600,color:th.txt}}/>
+      </div>
+      <input type="number" value={val} style={inp}
+        onChange={e=>{typing.current=true;setVal(e.target.value);}}
+        onBlur={()=>{typing.current=false;onSaveAmt(parseFloat(val)||0);}}
+        onKeyDown={e=>e.key==="Enter"&&e.target.blur()}
+        onFocus={e=>e.target.style.borderColor=color}/>
+      <button onClick={onDel} style={{width:28,height:28,borderRadius:8,border:`2px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:"#ef4444",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+    </div>
+  );
+}
+
+function AssetGroupDetail({group,label,color,items,labels,data,onUpdate,onBack,th}){
+  const gItems=items.filter(i=>i.group===group);
+  const total=gItems.reduce((a,i)=>a+(i.amount||0),0);
+  const updA=(key,v)=>onUpdate({...data,items:data.items.map(i=>i.key===key?{...i,amount:v}:i)});
+  const updL=(key,v)=>onUpdate({...data,items:data.items.map(i=>i.key===key?{...i,label:v}:i)});
+  const addI=()=>onUpdate({...data,items:[...data.items,{key:"i"+Date.now(),label:"פריט חדש",amount:0,group}]});
+  const delI=key=>onUpdate({...data,items:data.items.filter(i=>i.key!==key)});
+  const updGroupLabel=v=>onUpdate({...data,labels:{...labels,[group]:v}});
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:th.bg}} className="slideRight">
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:`2px solid ${th.bdr}`,flexShrink:0,background:th.bg2}}>
+        <button onClick={onBack} style={{width:36,height:36,borderRadius:10,border:`2px solid ${th.bdr}`,cursor:"pointer",background:th.bg3,color:th.txt,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <div style={{flex:1}}>
+          <EditInline val={label} onSave={updGroupLabel} style={{fontSize:17,fontWeight:800,color,letterSpacing:-.3}}/>
+        </div>
+        <div style={{fontSize:20,fontWeight:800,color,letterSpacing:-.5}}>{new Intl.NumberFormat("he-IL",{style:"currency",currency:"ILS",maximumFractionDigits:0}).format(total)}</div>
+      </div>
+      <div style={{overflowY:"auto",flex:1,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,WebkitOverflowScrolling:"touch"}}>
+        {gItems.map(it=>(
+          <AssetRow key={it.key} it={it} color={color} th={th}
+            onSaveAmt={v=>updA(it.key,v)} onSaveLbl={v=>updL(it.key,v)} onDel={()=>delI(it.key)}/>
+        ))}
+        <button onClick={addI} style={{padding:"14px 0",borderRadius:12,border:`2px dashed ${th.bdr}`,background:"transparent",color:th.txt2,fontSize:13,cursor:"pointer"}}>
+          + הוסף שורה
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Assets({assets,onUpdate,th}){
+  const[view,setView]=useState(null); // null | "liquid" | "emergency"
+  const norm=a=>{
+    if(a&&a.items)return a;
+    return{labels:{liquid:"כסף נזיל",emergency:"כסף בחירום"},items:[
+      {key:"mom",label:"אמא",amount:a.mom||130000,group:"liquid"},
+      {key:"stocks",label:"מניות",amount:a.stocks||90926,group:"liquid"},
+      {key:"fund",label:"קרן כספית",amount:a.fund||300559,group:"liquid"},
+      {key:"trip",label:"טיול",amount:a.trip||2551,group:"liquid"},
+      {key:"doron",label:"דורון K130",amount:a.doron||2299,group:"liquid"},
+      {key:"emergency",label:"קרן חירום",amount:a.emergency||52869,group:"emergency"},
+    ]};
+  };
+  const data=norm(assets);
+  const labels=data.labels||{liquid:"כסף נזיל",emergency:"כסף בחירום"};
+  const items=data.items||[];
+  const liqT=items.filter(i=>i.group==="liquid").reduce((a,i)=>a+(i.amount||0),0);
+  const emT=items.filter(i=>i.group==="emergency").reduce((a,i)=>a+(i.amount||0),0);
+  const grand=liqT+emT;
+  const fmt2=n=>new Intl.NumberFormat("he-IL",{style:"currency",currency:"ILS",maximumFractionDigits:0}).format(n||0);
+
+  if(view){
+    const isLiq=view==="liquid";
+    return<AssetGroupDetail
+      group={view} label={labels[view]} color={isLiq?"#6366f1":"#f59e0b"}
+      items={items} labels={labels} data={data}
+      onUpdate={nd=>onUpdate(nd)} onBack={()=>setView(null)} th={th}/>;
+  }
+
+  const GROUPS=[
+    {key:"liquid",  label:labels.liquid||"כסף נזיל",  color:"#6366f1", total:liqT,  count:items.filter(i=>i.group==="liquid").length,   icon:"liquid"},
+    {key:"emergency",label:labels.emergency||"כסף בחירום",color:"#f59e0b",total:emT,count:items.filter(i=>i.group==="emergency").length,icon:"emergency"},
+  ];
+
+  const LiqIcon=()=>(
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#6366f1" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M12 2C6 9 4 13 4 16a8 8 0 0016 0c0-3-2-7-8-14z"/>
+    </svg>
+  );
+  const ShieldIcon=()=>(
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M12 3l8 4v5c0 4.5-3.5 8.7-8 10-4.5-1.3-8-5.5-8-10V7l8-4z"/>
+    </svg>
+  );
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:th.bg,overflowY:"auto"}} className="fadeUp">
+      {/* Grand total hero */}
+      <div style={{margin:"16px 16px 8px",borderRadius:18,padding:"24px 20px",background:"linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%)",boxShadow:"0 8px 24px rgba(99,102,241,.35)"}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.7)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:6}}>הון עצמי כולל</div>
+        <div style={{fontSize:36,fontWeight:900,color:"#fff",letterSpacing:-1,marginBottom:14}}>{fmt2(grand)}</div>
+        <div style={{height:1,background:"rgba(255,255,255,.2)",marginBottom:14}}/>
+        <div style={{display:"flex",justifyContent:"space-between"}}>
+          <div><div style={{fontSize:10,color:"rgba(255,255,255,.6)",marginBottom:2}}>נזיל</div><div style={{fontSize:16,fontWeight:700,color:"#c7d2fe"}}>{fmt2(liqT)}</div></div>
+          <div style={{textAlign:"left"}}><div style={{fontSize:10,color:"rgba(255,255,255,.6)",marginBottom:2}}>חירום</div><div style={{fontSize:16,fontWeight:700,color:"#fde68a"}}>{fmt2(emT)}</div></div>
+        </div>
+      </div>
+
+      {/* Group cards — click to drill in */}
+      <div style={{padding:"8px 16px 16px",display:"flex",flexDirection:"column",gap:12}}>
+        {GROUPS.map(g=>(
+          <div key={g.key} onClick={()=>setView(g.key)}
+            style={{borderRadius:16,padding:"18px 16px",cursor:"pointer",background:th.bg2,
+              border:`2px solid ${g.color}44`,
+              boxShadow:th.d?"0 3px 14px rgba(0,0,0,.4)":"0 3px 14px rgba(0,0,0,.08)",
+              transition:"transform .12s"}}
+            onTouchStart={e=>e.currentTarget.style.transform="scale(.985)"}
+            onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <div style={{width:48,height:48,borderRadius:14,background:`${g.color}15`,border:`2px solid ${g.color}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {g.key==="liquid"?<LiqIcon/>:<ShieldIcon/>}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:16,fontWeight:700,color:th.txt,letterSpacing:-.2}}>{g.label}</div>
+                <div style={{fontSize:12,color:th.txt2,marginTop:2}}>{g.count} פריטים</div>
+              </div>
+              <div style={{textAlign:"left"}}>
+                <div style={{fontSize:20,fontWeight:800,color:g.color,letterSpacing:-.4}}>{fmt2(g.total)}</div>
+                <div style={{fontSize:10,color:th.txt2,marginTop:1}}>{grand>0?Math.round(g.total/grand*100):0}% מהסך</div>
+              </div>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={th.txt2} strokeWidth="2.5" style={{flexShrink:0}}><path d="M15 18l-6-6 6-6"/></svg>
+            </div>
+            {/* Mini bar */}
+            <div style={{marginTop:14}}>
+              <ProgressBar pct={grand>0?g.total/grand*100:0} color={g.color} h={4}/>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Stats({months,cats,users,th}){
+  const[filterMode,setFilterMode]=useState("all"); // "all" | "pick" | "range"
+  const[picked,setPicked]=useState(new Set(months.map(m=>m.id)));
+  const[fromIdx,setFromIdx]=useState(0);
+  const[toIdx,setToIdx]=useState(Math.max(0,months.length-1));
+
+  const togglePick=id=>setPicked(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});
+
+  const selMonths=useMemo(()=>{
+    if(filterMode==="all")return months;
+    if(filterMode==="pick")return months.filter(m=>picked.has(m.id));
+    if(filterMode==="range")return months.slice(fromIdx,toIdx+1);
+    return months;
+  },[filterMode,months,picked,fromIdx,toIdx]);
+
+  const allItems=selMonths.flatMap(m=>m.items||[]);
+  const ti=selMonths.reduce((a,m)=>a+Object.values(m.incomes||{}).reduce((x,y)=>x+y,0),0);
+  const ts=allItems.filter(i=>i.cat==="savings").reduce((a,i)=>a+(i.amount||0),0);
+  const fmt2=n=>new Intl.NumberFormat("he-IL",{style:"currency",currency:"ILS",maximumFractionDigits:0}).format(n||0);
+
+  const tabBtn=(key,label)=>(
+    <button onClick={()=>setFilterMode(key)}
+      style={{flex:1,padding:"8px 0",borderRadius:8,border:`2px solid ${filterMode===key?"#6366f1":th.bdr}`,cursor:"pointer",fontSize:12,fontWeight:filterMode===key?700:400,
+        background:filterMode===key?"rgba(99,102,241,.1)":"transparent",color:filterMode===key?"#6366f1":th.txt2,fontFamily:"Heebo,sans-serif",transition:"all .15s"}}>
+      {label}
+    </button>
+  );
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",background:th.bg}} className="fadeUp">
+      {/* Filter bar */}
+      <div style={{padding:"12px 16px",borderBottom:`2px solid ${th.bdr}`,flexShrink:0,background:th.bg2}}>
+        <div style={{fontSize:10,color:th.txt2,marginBottom:8,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>סינון נתונים</div>
+        <div style={{display:"flex",gap:6,marginBottom:10}}>
+          {tabBtn("all","הכל")}
+          {tabBtn("range","טווח")}
+          {tabBtn("pick","בחירה")}
+        </div>
+
+        {filterMode==="range"&&months.length>1&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div>
+                <div style={{fontSize:10,color:th.txt2,marginBottom:4}}>מחודש</div>
+                <select value={fromIdx} onChange={e=>setFromIdx(parseInt(e.target.value))}
+                  style={{width:"100%",padding:"7px 10px",borderRadius:8,border:`2px solid ${th.bdr}`,background:th.bg3,color:th.txt,fontSize:13,outline:"none",fontFamily:"Heebo,sans-serif"}}>
+                  {months.map((m,i)=><option key={m.id} value={i}>{m.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize:10,color:th.txt2,marginBottom:4}}>עד חודש</div>
+                <select value={toIdx} onChange={e=>setToIdx(parseInt(e.target.value))}
+                  style={{width:"100%",padding:"7px 10px",borderRadius:8,border:`2px solid ${th.bdr}`,background:th.bg3,color:th.txt,fontSize:13,outline:"none",fontFamily:"Heebo,sans-serif"}}>
+                  {months.map((m,i)=><option key={m.id} value={i}>{m.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{fontSize:11,color:th.txt2,textAlign:"center"}}>
+              {selMonths.length} חודשים נבחרו ({months[fromIdx]?.name} — {months[toIdx]?.name})
+            </div>
+          </div>
+        )}
+
+        {filterMode==="pick"&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {months.map(m=>(
+              <button key={m.id} onClick={()=>togglePick(m.id)}
+                style={{padding:"5px 12px",borderRadius:99,border:`2px solid ${picked.has(m.id)?"#6366f1":th.bdr}`,cursor:"pointer",fontSize:12,fontWeight:picked.has(m.id)?600:400,
+                  background:picked.has(m.id)?"rgba(99,102,241,.1)":"transparent",color:picked.has(m.id)?"#6366f1":th.txt2,fontFamily:"Heebo,sans-serif"}}>
+                {m.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{overflowY:"auto",flex:1,padding:16,display:"flex",flexDirection:"column",gap:12,WebkitOverflowScrolling:"touch"}}>
+        {/* KPI cards */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {[["הכנסות",fmt2(ti),"#818cf8"],["חיסכון",fmt2(ts),"#34d399"],
+            ["% חיסכון",`${ti>0?Math.round(ts/ti*100):0}%`,"#f9a8d4"],
+            ["חודשים",selMonths.length,"#fcd34d"]].map(([l,v,col])=>(
+            <div key={l} style={{borderRadius:14,padding:"14px",background:th.bg2,border:`2px solid ${th.bdr}`,boxShadow:th.d?"0 2px 8px rgba(0,0,0,.3)":"0 2px 8px rgba(0,0,0,.06)"}}>
+              <div style={{fontSize:9,color:th.txt2,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>{l}</div>
+              <div style={{fontSize:22,fontWeight:800,color:col,letterSpacing:-.5}}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Income per user */}
+        <div style={{borderRadius:14,padding:14,background:th.bg2,border:`2px solid ${th.bdr}`}}>
+          <div style={{fontSize:10,color:th.txt2,marginBottom:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>הכנסות לפי משתמש</div>
+          {users.map(u=>{
+            const uInc=selMonths.reduce((a,m)=>a+((m.incomes||{})[u.id]||0),0);
+            const pct=ti>0?Math.round(uInc/ti*100):0;
+            return(
+              <div key={u.id} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <div style={{width:8,height:8,borderRadius:99,background:u.color}}/>
+                    <span style={{fontSize:13,color:th.txt}}>{u.name}</span>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontSize:11,color:th.txt2}}>{pct}%</span>
+                    <span style={{fontSize:14,fontWeight:700,color:u.color}}>{fmt2(uInc)}</span>
+                  </div>
+                </div>
+                <ProgressBar pct={pct} color={u.color} h={3}/>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Expenses per user */}
+        <div style={{borderRadius:14,padding:14,background:th.bg2,border:`2px solid ${th.bdr}`}}>
+          <div style={{fontSize:10,color:th.txt2,marginBottom:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>הוצאות לפי משתמש</div>
+          {users.map(u=>{
+            const uExp=allItems.filter(i=>i.by===u.id).reduce((a,i)=>a+(i.amount||0),0);
+            const totExp=allItems.reduce((a,i)=>a+(i.amount||0),0);
+            const pct=totExp>0?Math.round(uExp/totExp*100):0;
+            return(
+              <div key={u.id} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <div style={{width:8,height:8,borderRadius:99,background:u.color}}/>
+                    <span style={{fontSize:13,color:th.txt}}>{u.name}</span>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontSize:11,color:th.txt2}}>{pct}%</span>
+                    <span style={{fontSize:14,fontWeight:700,color:th.txt}}>{fmt2(uExp)}</span>
+                  </div>
+                </div>
+                <ProgressBar pct={pct} color={u.color} h={3}/>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Per category */}
+        {cats.map(cat=>{
+          const tb=selMonths.reduce((a,m)=>a+(budgetsFor(cats,Object.values(m.incomes||{}).reduce((x,y)=>x+y,0))[cat.key]||0),0);
+          const te=allItems.filter(i=>i.cat===cat.key).reduce((a,i)=>a+(i.amount||0),0);
+          const p=tb>0?Math.min(te/tb*100,100):0;
+          const over=cat.key!=="savings"&&te>tb;
+          return(
+            <div key={cat.key} style={{borderRadius:14,padding:14,background:th.bg2,border:`2px solid ${over?"rgba(239,68,68,.4)":th.bdr}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <div style={{width:4,height:28,borderRadius:99,background:cat.color,flexShrink:0}}/>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:600,color:th.txt}}>{cat.label}</div>
+                    <div style={{fontSize:10,color:th.txt2,marginTop:1}}>תקציב: {fmt2(tb)}</div>
+                  </div>
+                </div>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontSize:15,fontWeight:800,color:over?"#f87171":"#34d399",letterSpacing:-.3}}>{fmt2(te)}</div>
+                  <div style={{fontSize:10,color:th.txt2}}>{Math.round(p)}%</div>
+                </div>
+              </div>
+              <ProgressBar pct={p} color={over?"#ef4444":cat.color} h={4}/>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
+   APP
+══════════════════════════════════════ */
+function App(){
+  const th=useTheme();
+  const[uid,setUid]=useState(null);
+  const[conn,setConn]=useState(false);
+  const[sync,setSync]=useState(false);
+  const[data,setData]=useState(INIT);
+  const[nav,setNav]=useState("months");
+  const[showSet,setShowSet]=useState(false);
+  const[showUsers,setShowUsers]=useState(false);
+
+  const cats=data.cats&&data.cats.length?data.cats:DEF_CATS;
+  const users=data.users&&data.users.length?data.users:DEF_USERS;
+
+  useEffect(()=>{
+    const loc=lsLoad();
+    if(loc&&loc.months)setData({...INIT,...loc,cats:loc.cats||DEF_CATS,users:loc.users||DEF_USERS});
+    const connect=()=>{
+      window._fb.on(window._fb.r("budget"),snap=>{
+        const d=snap.val();
+        if(d&&d.months)setData({...INIT,...d,cats:d.cats||DEF_CATS,users:d.users||DEF_USERS});
+        setConn(true);setSync(false);
+      });
+    };
+    if(window._fb?.ok)connect();
+    else window.addEventListener("fb-ready",connect,{once:true});
+  },[]);
+
+  const persist=useCallback(nd=>{
+    lsSave(nd);
+    if(window._fb?.ok){setSync(true);window._fb.set(window._fb.r("budget"),{...nd,_t:Date.now()}).then(()=>setSync(false)).catch(()=>setSync(false));}
+  },[]);
+
+  const updMonth=useCallback(m=>{
+    setData(prev=>{const nd={...prev,months:prev.months.map(x=>x.id===m.id?m:x)};persist(nd);return nd;});
+  },[persist]);
+
+  const addMonth=(afterId=null)=>{
+    setData(prev=>{
+      const months=prev.months;
+      const idx=afterId!==null?months.findIndex(m=>m.id===afterId):months.length-1;
+      const ref=months[idx];
+      const leftover=ref?Math.max(0,Math.round(Object.values(ref.incomes||{}).reduce((a,b)=>a+b,0)-totalSpent(ref.items))):0;
+      const defaultInc=Object.fromEntries(users.map(u=>[u.id,0]));
+      const nm={id:Date.now(),name:`חודש ${months.length+1}`,incomes:defaultInc,leftover,savingsGoal:0,budgets:budgetsFor(cats,0),items:[]};
+      const nm2=[...months.slice(0,idx+1),nm,...months.slice(idx+1)];
+      const nd={...prev,months:nm2};persist(nd);return nd;
+    });
+  };
+
+  const delMonth=id=>{
+    setData(prev=>{const nd={...prev,months:prev.months.filter(m=>m.id!==id)};persist(nd);return nd;});
+  };
+
+  const saveCats=newCats=>{
+    setData(prev=>{
+      const months=prev.months.map(m=>({...m,budgets:budgetsFor(newCats,Object.values(m.incomes||{}).reduce((a,b)=>a+b,0))}));
+      const nd={...prev,cats:newCats,months};persist(nd);return nd;
+    });
+    setShowSet(false);
+  };
+
+  const saveUsers=newUsers=>{
+    setData(prev=>{const nd={...prev,users:newUsers};persist(nd);return nd;});
+    setShowUsers(false);
+  };
+
+  if(!uid)return<Login users={users} onLogin={setUid} th={th}/>;
+
+  const cu=users.find(u=>u.id===uid)||users[0];
+  const NAVS=[{key:"months",label:"חודשים"},{key:"assets",label:"נכסים"},{key:"stats",label:"סטטיסטיקה"}];
+
+  const NAV_ICONS={
+    months:<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
+    assets:<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>,
+    stats:<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 20V10M9 20V4M14 20v-6M19 20v-9"/></svg>,
+  };
+
+  return(
+    <div style={{background:th.bg,color:th.txt,height:"100%",display:"flex",flexDirection:"column",maxWidth:480,margin:"0 auto",transition:"background .25s"}}>
+
+      {/* Overlays */}
+      {showSet&&<div style={{position:"fixed",inset:0,zIndex:300,maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}><CatSettings cats={cats} onSave={saveCats} onBack={()=>setShowSet(false)} th={th}/></div>}
+      {showUsers&&<div style={{position:"fixed",inset:0,zIndex:300,maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}><UserSettings users={users} onSave={saveUsers} onBack={()=>setShowUsers(false)} th={th}/></div>}
+
+      {/* Top Bar */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:`1px solid ${th.bdr}`,flexShrink:0,background:th.bg}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:800,color:th.txt,letterSpacing:-.3}}>{cu.name}</div>
+          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:1}}>
+            {sync?<span style={{fontSize:10,color:th.txt2}} className="spin">↻</span>:conn?<span style={{width:6,height:6,borderRadius:99,background:"#34d399",display:"inline-block"}}/>:<span style={{width:6,height:6,borderRadius:99,background:"#ef4444",display:"inline-block"}} className="pulse"/>}
+            <span style={{fontSize:10,color:th.txt2}}>{sync?"מסנכרן...":conn?"מחובר":"מתחבר..."}</span>
+          </div>
+        </div>
+        <TopMenu th={th} cu={cu} onSettings={()=>setShowSet(true)} onUsers={()=>setShowUsers(true)} onToggleTheme={th.tog} onLogout={()=>{setUid(null);setNav("months");}}/>
+      </div>
+
+      {/* Content */}
+      <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+        {nav==="months"&&<MonthsSwiper months={data.months} cats={cats} users={users} uid={uid} onUpdate={updMonth} onAdd={()=>addMonth(null)} onDelete={delMonth} onInsertAfter={id=>addMonth(id)} th={th}/>}
+        {nav==="assets"&&<Assets assets={data.assets} onUpdate={a=>{setData(p=>{const nd={...p,assets:a};persist(nd);return nd;})}} th={th}/>}
+        {nav==="stats"&&<Stats months={data.months} cats={cats} users={users} th={th}/>}
+      </div>
+
+      {/* Bottom Nav */}
+      <div style={{display:"flex",borderTop:`1px solid ${th.bdr}`,background:th.navBg,backdropFilter:"blur(20px)",flexShrink:0}}>
+        {NAVS.map(n=>(
+          <button key={n.key} onClick={()=>setNav(n.key)}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 0 max(10px,env(safe-area-inset-bottom))",background:"none",border:"none",cursor:"pointer",color:nav===n.key?th.acc:th.txt2,fontFamily:"Heebo,sans-serif",transition:"color .2s"}}>
+            {NAV_ICONS[n.key]}
+            <span style={{fontSize:10,fontWeight:nav===n.key?700:400,letterSpacing:.2}}>{n.label}</span>
+            {nav===n.key&&<div style={{width:24,height:3,borderRadius:99,background:th.acc,marginTop:-1}}/>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
